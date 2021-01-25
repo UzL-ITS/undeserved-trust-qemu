@@ -1,0 +1,31 @@
+From 1cfb0be5fdad55948f42f9056dfc16dc435099cf Mon Sep 17 00:00:00 2001
+From: Tom Lendacky <thomas.lendacky@amd.com>
+Date: Thu, 24 Sep 2020 18:50:30 -0500
+Subject: [PATCH 6/6] sev/i386: Enable an SEV-ES guest based on SEV policy
+
+Update the sev_es_enabled() function return value to be based on the SEV
+policy that has been specified. SEV-ES is enabled if SEV is enabled and
+the SEV-ES policy bit is set in the policy object.
+
+Reviewed-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+Signed-off-by: Tom Lendacky <thomas.lendacky@amd.com>
+---
+ target/i386/sev.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/target/i386/sev.c b/target/i386/sev.c
+index 9c081173db..d3342f5cb2 100644
+--- a/target/i386/sev.c
++++ b/target/i386/sev.c
+@@ -377,7 +377,7 @@ sev_enabled(void)
+ bool
+ sev_es_enabled(void)
+ {
+-    return false;
++    return sev_enabled() && (sev_guest->policy & SEV_POLICY_ES);
+ }
+ 
+ uint64_t
+-- 
+2.25.1
+

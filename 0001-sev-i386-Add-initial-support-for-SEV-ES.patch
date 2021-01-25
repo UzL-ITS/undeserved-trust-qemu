@@ -1,0 +1,144 @@
+From 29ff1690a9f84536ccd303cda9f105814e117f45 Mon Sep 17 00:00:00 2001
+From: Tom Lendacky <thomas.lendacky@amd.com>
+Date: Thu, 24 Sep 2020 18:50:30 -0500
+Subject: [PATCH 1/6] sev/i386: Add initial support for SEV-ES
+
+Provide initial support for SEV-ES. This includes creating a function to
+indicate the guest is an SEV-ES guest (which will return false until all
+support is in place), performing the proper SEV initialization and
+ensuring that the guest CPU state is measured as part of the launch.
+
+Co-developed-by: Jiri Slaby <jslaby@suse.cz>
+Signed-off-by: Jiri Slaby <jslaby@suse.cz>
+Signed-off-by: Tom Lendacky <thomas.lendacky@amd.com>
+---
+ target/i386/cpu.c      |  1 +
+ target/i386/sev-stub.c |  5 +++++
+ target/i386/sev.c      | 44 ++++++++++++++++++++++++++++++++++++++++--
+ target/i386/sev_i386.h |  1 +
+ 4 files changed, 49 insertions(+), 2 deletions(-)
+
+diff --git a/target/i386/cpu.c b/target/i386/cpu.c
+index 3ffd877dd5..ca0e17ed07 100644
+--- a/target/i386/cpu.c
++++ b/target/i386/cpu.c
+@@ -5940,6 +5940,7 @@ void cpu_x86_cpuid(CPUX86State *env, uint32_t index, uint32_t count,
+         break;
+     case 0x8000001F:
+         *eax = sev_enabled() ? 0x2 : 0;
++        *eax |= sev_es_enabled() ? 0x8 : 0;
+         *ebx = sev_get_cbit_position();
+         *ebx |= sev_get_reduced_phys_bits() << 6;
+         *ecx = 0;
+diff --git a/target/i386/sev-stub.c b/target/i386/sev-stub.c
+index 88e3f39a1e..040ac90563 100644
+--- a/target/i386/sev-stub.c
++++ b/target/i386/sev-stub.c
+@@ -49,3 +49,8 @@ SevCapability *sev_get_capabilities(Error **errp)
+     error_setg(errp, "SEV is not available in this QEMU");
+     return NULL;
+ }
++
++bool sev_es_enabled(void)
++{
++    return false;
++}
+diff --git a/target/i386/sev.c b/target/i386/sev.c
+index 93c4d60b82..af6b88691f 100644
+--- a/target/i386/sev.c
++++ b/target/i386/sev.c
+@@ -358,6 +358,12 @@ sev_enabled(void)
+     return !!sev_guest;
+ }
+ 
++bool
++sev_es_enabled(void)
++{
++    return false;
++}
++
+ uint64_t
+ sev_get_me_mask(void)
+ {
+@@ -578,6 +584,20 @@ sev_launch_update_data(SevGuestState *sev, uint8_t *addr, uint64_t len)
+     return ret;
+ }
+ 
++static int
++sev_launch_update_vmsa(SevGuestState *sev)
++{
++    int ret, fw_error;
++
++    ret = sev_ioctl(sev->sev_fd, KVM_SEV_LAUNCH_UPDATE_VMSA, NULL, &fw_error);
++    if (ret) {
++        error_report("%s: LAUNCH_UPDATE_VMSA ret=%d fw_error=%d '%s'",
++                __func__, ret, fw_error, fw_error_to_str(fw_error));
++    }
++
++    return ret;
++}
++
+ static void
+ sev_launch_get_measure(Notifier *notifier, void *unused)
+ {
+@@ -590,6 +610,14 @@ sev_launch_get_measure(Notifier *notifier, void *unused)
+         return;
+     }
+ 
++    if (sev_es_enabled()) {
++        /* measure all the VM save areas before getting launch_measure */
++        ret = sev_launch_update_vmsa(sev);
++        if (ret) {
++            exit(1);
++        }
++    }
++
+     measurement = g_new0(struct kvm_sev_launch_measure, 1);
+ 
+     /* query the measurement blob length */
+@@ -684,7 +712,7 @@ sev_guest_init(const char *id)
+ {
+     SevGuestState *sev;
+     char *devname;
+-    int ret, fw_error;
++    int ret, fw_error, cmd;
+     uint32_t ebx;
+     uint32_t host_cbitpos;
+     struct sev_user_data_status status = {};
+@@ -745,8 +773,20 @@ sev_guest_init(const char *id)
+     sev->api_major = status.api_major;
+     sev->api_minor = status.api_minor;
+ 
++    if (sev_es_enabled()) {
++        if (!(status.flags & SEV_STATUS_FLAGS_CONFIG_ES)) {
++            error_report("%s: guest policy requires SEV-ES, but "
++                         "host SEV-ES support unavailable",
++                         __func__);
++            goto err;
++        }
++        cmd = KVM_SEV_ES_INIT;
++    } else {
++        cmd = KVM_SEV_INIT;
++    }
++
+     trace_kvm_sev_init();
+-    ret = sev_ioctl(sev->sev_fd, KVM_SEV_INIT, NULL, &fw_error);
++    ret = sev_ioctl(sev->sev_fd, cmd, NULL, &fw_error);
+     if (ret) {
+         error_report("%s: failed to initialize ret=%d fw_error=%d '%s'",
+                      __func__, ret, fw_error, fw_error_to_str(fw_error));
+diff --git a/target/i386/sev_i386.h b/target/i386/sev_i386.h
+index 4db6960f60..4f9a5e9b21 100644
+--- a/target/i386/sev_i386.h
++++ b/target/i386/sev_i386.h
+@@ -29,6 +29,7 @@
+ #define SEV_POLICY_SEV          0x20
+ 
+ extern bool sev_enabled(void);
++extern bool sev_es_enabled(void);
+ extern uint64_t sev_get_me_mask(void);
+ extern SevInfo *sev_get_info(void);
+ extern uint32_t sev_get_cbit_position(void);
+-- 
+2.25.1
+

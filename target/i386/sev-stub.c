@@ -54,3 +54,9 @@ int sev_inject_launch_secret(const char *hdr, const char *secret,
 {
     return 1;
 }
+
+
+bool sev_es_enabled(void)
+{
+    return false;
+}

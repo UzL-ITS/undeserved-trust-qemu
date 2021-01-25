@@ -1,0 +1,34 @@
+From dcbeb6aba051f10b8e6e8a0b90e26101eb3ee526 Mon Sep 17 00:00:00 2001
+From: Tom Lendacky <thomas.lendacky@amd.com>
+Date: Thu, 24 Sep 2020 18:50:30 -0500
+Subject: [PATCH 2/6] sev/i386: Require in-kernel irqchip support for SEV-ES
+ guests
+
+In prep for AP booting, require the use of in-kernel irqchip support. This
+lessens the Qemu support burden required to boot APs.
+
+Signed-off-by: Tom Lendacky <thomas.lendacky@amd.com>
+---
+ target/i386/sev.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/target/i386/sev.c b/target/i386/sev.c
+index af6b88691f..0d4bd3cd75 100644
+--- a/target/i386/sev.c
++++ b/target/i386/sev.c
+@@ -774,6 +774,12 @@ sev_guest_init(const char *id)
+     sev->api_minor = status.api_minor;
+ 
+     if (sev_es_enabled()) {
++        if (!kvm_kernel_irqchip_allowed()) {
++            error_report("%s: SEV-ES guests require in-kernel irqchip support",
++                         __func__);
++            goto err;
++        }
++
+         if (!(status.flags & SEV_STATUS_FLAGS_CONFIG_ES)) {
+             error_report("%s: guest policy requires SEV-ES, but "
+                          "host SEV-ES support unavailable",
+-- 
+2.25.1
+
