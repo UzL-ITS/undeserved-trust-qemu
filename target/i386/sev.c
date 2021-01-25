@@ -22,6 +22,7 @@
 #include "qom/object_interfaces.h"
 #include "qemu/base64.h"
 #include "qemu/module.h"
+#include "qemu/uuid.h"
 #include "sysemu/kvm.h"
 #include "sev_i386.h"
 #include "sysemu/sysemu.h"
@@ -70,6 +71,21 @@ struct SevGuestState {
 
 #define DEFAULT_GUEST_POLICY    0x1 /* disable debug */
 #define DEFAULT_SEV_DEVICE      "/dev/sev"
+
+/* SEV Information Block GUID = 00f771de-1a7e-4fcb-890e-68c77e2fb44e */
+static const QemuUUID sev_info_block_guid_le = {
+    .data = UUID_LE(0x00f771de, 0x1a7e, 0x4fcb,
+                    0x89, 0x0e, 0x68, 0xc7, 0x7e, 0x2f, 0xb4, 0x4e),
+};
+
+typedef struct __attribute__((__packed__)) SevInfoBlock {
+    /* SEV-ES Reset Vector Address */
+    uint32_t reset_addr;
+
+    /* SEV Information Block size and GUID */
+    uint16_t size;
+    QemuUUID guid;
+} SevInfoBlock;
 
 static SevGuestState *sev_guest;
 static Error *sev_mig_blocker;
@@ -892,6 +908,49 @@ int sev_inject_launch_secret(const char *packet_hdr, const char *secret,
                      ret, error, fw_error_to_str(error));
         return ret;
     }
+
+    return 0;
+}
+
+int
+sev_es_save_reset_vector(void *handle, void *flash_ptr, uint64_t flash_size,
+                         uint32_t *addr)
+{
+    QemuUUID *info_guid;
+    SevInfoBlock *info;
+
+    assert(handle);
+
+    /*
+     * Initialize the address to zero. An address of zero with a successful
+     * return code indicates that SEV-ES is not active.
+     */
+    *addr = 0;
+    if (!sev_es_enabled()) {
+        return 0;
+    }
+
+    /*
+     * Extract the AP reset vector for SEV-ES guests by locating the SEV GUID.
+     * The SEV GUID is located 32 bytes from the end of the flash. Use this
+     * address to base the SEV information block.
+     *
+     * Because SevInfoBlock is a packed structure, operate on the GUID
+     * directly to avoid compiler warnings/errors.
+     */
+    info_guid = flash_ptr + flash_size - 0x20 - sizeof(*info_guid);
+    if (!qemu_uuid_is_equal(info_guid, &sev_info_block_guid_le)) {
+        error_report("SEV information block not found in pflash rom");
+        return 1;
+    }
+
+    info = flash_ptr + flash_size - 0x20 - sizeof(*info);
+    if (!info->reset_addr) {
+        error_report("SEV-ES reset address is zero");
+        return 1;
+    }
+
+    *addr = info->reset_addr;
 
     return 0;
 }
