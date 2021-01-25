@@ -130,6 +130,11 @@ void hw_error(const char *fmt, ...)
  */
 static const CpusAccel *cpus_accel;
 
+bool cpus_are_resettable(void)
+{
+    return cpu_check_are_resettable();
+}
+
 void cpu_synchronize_all_states(void)
 {
     CPUState *cpu;

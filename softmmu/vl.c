@@ -1112,7 +1112,10 @@ static void parse_display(const char *p)
          * vnc isn't a (local) DisplayType but a protocol for remote
          * display access.
          */
-        if (*opts == '=') {
+        if (!cpus_are_resettable()) {
+        error_report("cpus are not resettable, terminating");
+        shutdown_requested = reason;
+    } else if (*opts == '=') {
             vnc_parse(opts + 1);
         } else {
             error_report("VNC requires a display argument vnc=<display>");
