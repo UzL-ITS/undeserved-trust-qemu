@@ -1,0 +1,31 @@
+From eaec49f1ce4c8fd69277b1a7c374dcd87b9bb95d Mon Sep 17 00:00:00 2001
+From: Tom Lendacky <thomas.lendacky@amd.com>
+Date: Thu, 24 Sep 2020 18:50:30 -0500
+Subject: [PATCH 5/6] kvm/i386: Use a per-VM check for SMM capability
+
+SMM is not currently supported for an SEV-ES guest by KVM. Change the SMM
+capability check from a KVM-wide check to a per-VM check in order to have
+a finer-grained SMM capability check.
+
+Suggested-by: Sean Christopherson <sean.j.christopherson@intel.com>
+Signed-off-by: Tom Lendacky <thomas.lendacky@amd.com>
+---
+ target/i386/kvm.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/target/i386/kvm/kvm.c b/target/i386/kvm/kvm.c
+index eefd1a11b6..917cdf8055 100644
+--- a/target/i386/kvm/kvm.c
++++ b/target/i386/kvm/kvm.c
+@@ -134,7 +134,7 @@ int kvm_has_pit_state2(void)
+ 
+ bool kvm_has_smm(void)
+ {
+-    return kvm_check_extension(kvm_state, KVM_CAP_X86_SMM);
++    return kvm_vm_check_extension(kvm_state, KVM_CAP_X86_SMM);
+ }
+ 
+ bool kvm_has_adjust_clock_stable(void)
+-- 
+2.25.1
+
