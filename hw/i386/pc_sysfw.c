@@ -304,11 +304,13 @@ static void pc_system_flash_map(PCMachineState *pcms,
                 pc_system_parse_ovmf_flash(flash_ptr, flash_size);
 
                 //luca: was not sure about order in merge, as pc_system_parse_ovmf_flash was also patched in
+                /*
                 ret = kvm_memcrypt_save_reset_vector(flash_ptr, flash_size);
                 if (ret) {
                     error_report("failed to locate and/or save reset vector");
                     exit(1);
                 }
+                */
 
                 ret = kvm_memcrypt_encrypt_data(flash_ptr, flash_size);
                 if (ret) {

@@ -955,6 +955,8 @@ sev_es_save_reset_vector(void *handle, void *flash_ptr, uint64_t flash_size,
     return 0;
 }
 
+
+
 static void
 sev_register_types(void)
 {

@@ -1114,7 +1114,8 @@ static void parse_display(const char *p)
          */
         if (!cpus_are_resettable()) {
         error_report("cpus are not resettable, terminating");
-        shutdown_requested = reason;
+        //luca: from merge, but undefined here and not used latter, commented for now
+        //shutdown_requested = reason;
     } else if (*opts == '=') {
             vnc_parse(opts + 1);
         } else {

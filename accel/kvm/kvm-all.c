@@ -308,6 +308,8 @@ int kvm_memcrypt_save_reset_vector(void *flash_ptr, uint64_t flash_size)
     return 0;
 }
 
+
+
 /* Called with KVMMemoryListener.slots_lock held */
 static KVMSlot *kvm_get_free_slot(KVMMemoryListener *kml)
 {
