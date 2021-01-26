@@ -938,13 +938,20 @@ sev_es_save_reset_vector(void *handle, void *flash_ptr, uint64_t flash_size,
      * Because SevInfoBlock is a packed structure, operate on the GUID
      * directly to avoid compiler warnings/errors.
      */
-    info_guid = flash_ptr + flash_size - 0x20 - sizeof(*info_guid);
+    //original line
+    //info_guid = flash_ptr + flash_size - 0x20 - sizeof(*info_guid);
+    //updated line, table size must have changed footer guid starts at -48, -2 for tlength field
+    info_guid = flash_ptr + flash_size - 48 - 2- sizeof(*info_guid);
+    error_report("info_guid[0] = %x, info_guid[1] = %x",((unsigned char*)info_guid)[0],((unsigned char*)info_guid)[1]);
     if (!qemu_uuid_is_equal(info_guid, &sev_info_block_guid_le)) {
         error_report("SEV information block not found in pflash rom");
         return 1;
     }
 
-    info = flash_ptr + flash_size - 0x20 - sizeof(*info);
+    //original line
+    //info = flash_ptr + flash_size - 0x20 - sizeof(*info);
+    //updated line, table size must have changed
+    info = flash_ptr + flash_size -  48 - 2 - sizeof(*info);
     if (!info->reset_addr) {
         error_report("SEV-ES reset address is zero");
         return 1;

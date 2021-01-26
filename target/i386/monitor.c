@@ -750,13 +750,18 @@ void qmp_sev_inject_launch_secret(const char *packet_hdr,
          * not checking length means that this area can't be versioned
          * by length and would have to be replaced if updated
          */
+         //luca: data is set to area in table?
         if (!pc_system_ovmf_table_find(SEV_SECRET_GUID, &data, NULL)) {
             error_setg(errp, "SEV: no secret area found in OVMF,"
                        " gpa must be specified.");
             return;
         }
+        
+        //use data from table for destination in secret injection
         area = (struct sev_secret_area *)data;
         gpa = area->base;
+        error_report("extracted from table: base entry = 0x%x, table entry = 0x%x",
+        area->base,area->size);
     }
 
     sev_inject_launch_secret(packet_hdr, secret, gpa, errp);

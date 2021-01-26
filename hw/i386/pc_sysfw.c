@@ -126,6 +126,7 @@ void pc_system_flash_cleanup_unused(PCMachineState *pcms)
 
 #define OVMF_TABLE_FOOTER_GUID "96b582de-1fb2-45f7-baea-a366c55a082d"
 
+//pc_system_parse_ovmf_flash sets this to the foot of the table
 static uint8_t *ovmf_table;
 static int ovmf_table_len;
 
@@ -149,6 +150,7 @@ static void pc_system_parse_ovmf_flash(uint8_t *flash_ptr, int flash_size)
     guid = qemu_uuid_bswap(guid); /* guids are LE */
     ptr = flash_ptr + flash_size - 48;
     if (!qemu_uuid_is_equal((QemuUUID *)ptr, &guid)) {
+        error_report("pc_system_parse_ovmf_flash 48 byte assumption for footer failed");
         return;
     }
 
@@ -172,6 +174,8 @@ static void pc_system_parse_ovmf_flash(uint8_t *flash_ptr, int flash_size)
     ovmf_table += tot_len;
 }
 
+//used before secret injection, expects ovmf_table to be initialized by
+// pc_system_parse_ovmf_flash
 bool pc_system_ovmf_table_find(const char *entry, uint8_t **data,
                                int *data_len)
 {
@@ -193,12 +197,16 @@ bool pc_system_ovmf_table_find(const char *entry, uint8_t **data,
         QemuUUID *guid;
 
         /*
+         * 
          * The data structure is
-         *   arbitrary length data
+         *   arbitrary length data [luca: these are the payload entries]
          *   2 byte length of entire entry
          *   16 byte guid
          */
+         //luca: ptr points ant end of an entry, entries always end with a 16 byte guid
+         //so set guid to ptr - guid size (16 byte fidex)
         guid = (QemuUUID *)(ptr - sizeof(QemuUUID));
+        //extract len of this entry
         len = le16_to_cpu(*(uint16_t *)(ptr - sizeof(QemuUUID) -
                                         sizeof(uint16_t)));
 
@@ -210,8 +218,12 @@ bool pc_system_ovmf_table_find(const char *entry, uint8_t **data,
                 return false;
         }
 
+        //luca: set ptr to the start of the last entry
         ptr -= len;
         tot_len -= len;
+        //if the uuid we parsed above, matches the one we want, set
+        //data to the "payload" data of the entry, use len (minus the non payload field lenghts)
+        //to get the length of the entry
         if (qemu_uuid_is_equal(guid, &entry_guid)) {
             if (data) {
                 *data = ptr;
@@ -301,16 +313,18 @@ static void pc_system_flash_map(PCMachineState *pcms,
                  * OVMF places a GUIDed structures in the flash, so
                  * search for them
                  */
+                error_report("calling pc_system_parse_ovmf_flash with flash_ptr = %p flash_size=0x%lx",flash_ptr,flash_size);
                 pc_system_parse_ovmf_flash(flash_ptr, flash_size);
 
-                //luca: was not sure about order in merge, as pc_system_parse_ovmf_flash was also patched in
-                /*
+              
+
+                error_report("kvm_memcrypt_save_reset_vector with flash_ptr = %p flash_size=0x%lx",flash_ptr,flash_size);
                 ret = kvm_memcrypt_save_reset_vector(flash_ptr, flash_size);
                 if (ret) {
                     error_report("failed to locate and/or save reset vector");
                     exit(1);
                 }
-                */
+                
 
                 ret = kvm_memcrypt_encrypt_data(flash_ptr, flash_size);
                 if (ret) {
